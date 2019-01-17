@@ -595,9 +595,9 @@ For more details, see Tables :ref:`Energy <table:energy_gen>`,
     +-------------------------+----------------+-------------------+--------------+----------------+-----------------------------+-----------+------------+
     | MP2 [#f10]_             | RHF/UHF/ROHF   | CONV/DF/CD        | RHF/UHF      | CONV/DF        | threaded [#f3]_             | E/G       |            |
     +-------------------------+----------------+-------------------+--------------+----------------+-----------------------------+-----------+------------+
-    | MP3 [#f10]_             | RHF/UHF        | CONV/DF/CD        | RHF/UHF      | CONV/DF        | threaded [#f3]_             | E/G       | E          |
+    | MP3 [#f10]_             | RHF/UHF        | CONV/DF/CD        | RHF/UHF      | CONV/DF        | threaded [#f3]_             | E/G       | E [#f2]_   |
     +-------------------------+----------------+-------------------+--------------+----------------+-----------------------------+-----------+------------+
-    | MP2.5 [#f10]_           | RHF/UHF        | CONV/DF/CD        | RHF/UHF      | CONV/DF        | threaded [#f3]_             | E/G       |            |
+    | MP2.5 [#f10]_           | RHF/UHF        | CONV/DF/CD        | RHF/UHF      | CONV/DF        | threaded [#f3]_             | E/G       | E [#f11]_  |
     +-------------------------+----------------+-------------------+--------------+----------------+-----------------------------+-----------+------------+
     | MP4 [#f10]_             | RHF            | CONV              | ---          | ---            | threaded [#f3]_             |           | E          |
     +-------------------------+----------------+-------------------+--------------+----------------+-----------------------------+-----------+------------+
@@ -605,13 +605,13 @@ For more details, see Tables :ref:`Energy <table:energy_gen>`,
     +-------------------------+----------------+-------------------+--------------+----------------+-----------------------------+-----------+------------+
     | ZAPT(n)                 | RHF/ROHF       | CONV              | ---          | ---            | partially threaded          |           |            |
     +-------------------------+----------------+-------------------+--------------+----------------+-----------------------------+-----------+------------+
-    | LCCD [#f10]_            | RHF/UHF        | CONV/DF/CD        | RHF/UHF      | CONV/DF        | threaded [#f3]_             | E/G       | E          |
+    | LCCD [#f10]_            | RHF/UHF        | CONV/DF/CD        | RHF/UHF      | CONV/DF        | threaded [#f3]_             | E/G       | E [#f2]_   |
     +-------------------------+----------------+-------------------+--------------+----------------+-----------------------------+-----------+------------+
     | LCCSD, CEPA(0) [#f10]_  | RHF            | CONV              | ---          | ---            | threaded [#f3]_             |           | E          |
     +-------------------------+----------------+-------------------+--------------+----------------+-----------------------------+-----------+------------+
     | CEPA(n), n=0,1,3        | RHF            | CONV              | ---          | ---            | threaded [#f3]_             |           | E          |
     +-------------------------+----------------+-------------------+--------------+----------------+-----------------------------+-----------+------------+
-    | CCD                     | RHF            | DF/CD             | RHF          | DF             | threaded [#f3]_             |           |            |
+    | CCD                     | RHF            | DF/CD             | RHF          | DF             | threaded [#f3]_             |           | E [#f11]_  |
     +-------------------------+----------------+-------------------+--------------+----------------+-----------------------------+-----------+------------+
     | CC2                     | RHF/UHF/ROHF   | CONV              | RHF          | CONV           | threaded [#f3]_             |           |            |
     +-------------------------+----------------+-------------------+--------------+----------------+-----------------------------+-----------+------------+
@@ -619,7 +619,7 @@ For more details, see Tables :ref:`Energy <table:energy_gen>`,
     +-------------------------+----------------+-------------------+--------------+----------------+-----------------------------+-----------+------------+
     | CCSD(T) [#f10]_         | RHF/UHF/ROHF   | CONV/DF/CD [#f8]_ | RHF/UHF      | CONV/DF [#f8]_ | threaded (pthreads) [#f3]_  |           | E [#f2]_   |
     +-------------------------+----------------+-------------------+--------------+----------------+-----------------------------+-----------+------------+
-    | CCSD(AT) [#f10]_        | RHF            | CONV/DF/CD        | ---          | ---            | threaded [#f3]_             |           |            |
+    | CCSD(AT) [#f10]_        | RHF            | CONV/DF/CD        | ---          | ---            | threaded [#f3]_             |           | E [#f11]_  |
     +-------------------------+----------------+-------------------+--------------+----------------+-----------------------------+-----------+------------+
     | CC3                     | RHF/UHF/ROHF   | CONV              | ---          | ---            | threaded (pthreads)         |           |            |
     +-------------------------+----------------+-------------------+--------------+----------------+-----------------------------+-----------+------------+
@@ -707,8 +707,8 @@ Where-to-post summary:[#f6]_
 
 .. rubric:: Footnotes
 
-.. [#f1] Frozen natural orbital variant available. In particular, RHF available as CONV.
-.. [#f2] Frozen natural orbital variant available. In particular, RHF available as CONV/DF.
+.. [#f1] Frozen natural orbital variant available in FNOCC and DFOCC modules.
+.. [#f2] Frozen natural orbital variant available. In particular, RHF available as CONV/DF/CD.
 .. [#f3] threading through BLAS routines only
 .. [#f4] DFT gradients only implemented for SCF type DF. LRC-DFT gradients not implemented yet. DH-DFT gradients not implemented.
 .. [#f5] Both EFP/EFP and QM/EFP energies are available.
@@ -717,6 +717,7 @@ Where-to-post summary:[#f6]_
 .. [#f8] Not all combinations of reference and algorithm available. In particular, non-RHF references only available as CONV. For CCSD(T), gradients are not available with frozen core.
 .. [#f9] Orbital-optimized variant available. In particular, all references available as CONV/DF.
 .. [#f10] Capabilities breakdown in great detail can be found :ref:`here <table:managedmethods>`.
+.. [#f11] Frozen natural orbital variant available. In particular, RHF available as DF/CD.
 
 .. toctree::
    :hidden:
