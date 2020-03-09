@@ -38,10 +38,10 @@ import subprocess
 import warnings
 
 import numpy as np
-from qcelemental import constants
 
 from psi4 import extras
 from psi4 import core
+from psi4.driver import constants
 from psi4.driver import p4util
 from psi4.driver import qcdb
 from psi4.driver import psifiles as psif
