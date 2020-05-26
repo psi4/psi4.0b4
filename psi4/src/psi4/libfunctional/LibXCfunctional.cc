@@ -85,12 +85,12 @@ LibXCFunctional::LibXCFunctional(std::string xc_name, bool unpolarized) {
     }
 
     // Extract variables
-    if (xc_functional_->info->family == XC_FAMILY_HYB_GGA
-        || xc_functional_->info->family == XC_FAMILY_HYB_MGGA
+#if XC_MAJOR_VERSION < 6
+    if (xc_functional_->info->family == XC_FAMILY_HYB_GGA || xc_functional_->info->family == XC_FAMILY_HYB_MGGA
 #ifdef XC_FAMILY_HYB_LDA
         || xc_functional_->info->family == XC_FAMILY_HYB_LDA
 #endif
-        ) {
+    ) {
         /* Range separation? */
         lrc_ = false;
         if (xc_functional_->info->flags & XC_FLAGS_HYB_CAMY) {
@@ -138,22 +138,77 @@ LibXCFunctional::LibXCFunctional(std::string xc_name, bool unpolarized) {
             global_exch_ = alpha + beta;
             lr_exch_ = -1.0 * beta;
         }
-
         if (!lrc_) {
             // Global hybrid
             global_exch_ = xc_hyb_exx_coef(xc_functional_.get());
         }
     }
+#else
+    switch (xc_hyb_type(xc_functional_.get())) {
+        case (XC_HYB_SEMILOCAL):
+            lrc_ = false;
+            global_exch_ = 0.0;
+            lr_exch_ = 0.0;
+            break;
+
+        case (XC_HYB_HYBRID):
+            lrc_ = false;
+            global_exch_ = xc_hyb_exx_coef(xc_functional_.get());
+            lr_exch_ = 0.0;
+            break;
+
+        case (XC_HYB_CAM):
+            lrc_ = true;
+            double alpha, beta;
+            xc_hyb_cam_coef(xc_functional_.get(), &omega_, &alpha, &beta);
+            /*
+              The values alpha and beta have a different meaning in
+              psi4 and libxc.
+
+              In libxc, alpha is the contribution from full exact
+              exchange (at all ranges), and beta is the contribution
+              from short-range only exchange, yielding alpha exact
+              exchange at the long range and alpha+beta in the short
+              range in total.
+
+              In Psi4, alpha is the amount of exchange at all ranges,
+              while beta is the difference between the amount of
+              exchange in the long range and in the short range,
+              meaning alpha+beta at the long range, and alpha only at
+              the short range.
+
+              These differences amount to the transform
+
+              SR      = LibXC_ALPHA + LibXC_BETA = Psi4_ALPHA
+              LR      = LibXC_ALPHA              = Psi4_ALPHA + Psi4_BETA
+              LR - SR =             - LibXC_BETA =              Psi4_BETA
+            */
+
+            global_exch_ = alpha + beta;
+            lr_exch_ = -1.0 * beta;
+            break;
+
+        default:
+            outfile->Printf("Functional '%s' is a type of functional which is not supported in Psi4\n",
+                            xc_name.c_str());
+            throw PSIEXCEPTION("Not all types of functionals are supported in Psi4 at present");
+    }
+#endif
 
     // Figure out the family
     int family = xc_functional_->info->family;
 
+#if XC_MAJOR_VERSION < 6
     std::vector<int> gga_vec = {XC_FAMILY_GGA, XC_FAMILY_HYB_GGA};
+    std::vector<int> meta_vec = {XC_FAMILY_MGGA, XC_FAMILY_HYB_MGGA};
+#else
+    std::vector<int> gga_vec = {XC_FAMILY_GGA};
+    std::vector<int> meta_vec = {XC_FAMILY_MGGA};
+#endif
     if (std::find(gga_vec.begin(), gga_vec.end(), family) != gga_vec.end()) {
         gga_ = true;
     }
 
-    std::vector<int> meta_vec = {XC_FAMILY_MGGA, XC_FAMILY_HYB_MGGA};
     if (std::find(meta_vec.begin(), meta_vec.end(), family) != meta_vec.end()) {
         gga_ = true;
         meta_ = true;
@@ -174,7 +229,7 @@ LibXCFunctional::LibXCFunctional(std::string xc_name, bool unpolarized) {
         xc_nlc_coef(xc_functional_.get(), &vv10_b_, &vv10_c_);
         needs_vv10_ = true;
     }
-}
+}  // namespace psi
 LibXCFunctional::~LibXCFunctional() { xc_func_end(xc_functional_.get()); }
 std::shared_ptr<Functional> LibXCFunctional::build_worker() {
     // Build functional
@@ -214,12 +269,13 @@ double LibXCFunctional::query_density_cutoff() {
 void LibXCFunctional::set_omega(double omega) {
     omega_ = omega;
     user_omega_ = true;
+#if XC_MAJOR_VERSION < 6
     if (xc_func_name_ == "XC_GGA_X_WPBEH") {
-        xc_gga_x_wpbeh_set_params(xc_functional_.get(), omega);
+        xc_func_set_ext_params(xc_functional_.get(), &omega);
     } else if (xc_func_name_ == "XC_GGA_X_HJS_PBE") {
-        xc_gga_x_hjs_set_params(xc_functional_.get(), omega);
+        xc_func_set_ext_params(xc_functional_.get(), &omega);
     } else if (xc_func_name_ == "XC_HYB_GGA_XC_LRC_WPBEH") {
-        xc_gga_x_wpbeh_set_params(xc_functional_->func_aux[0], omega);
+        xc_func_set_ext_params(xc_functional_->func_aux[0], &omega);
     } else if (xc_func_name_ == "XC_HYB_GGA_XC_WB97X") {
         xc_functional_->cam_omega = omega;
     } else if (xc_func_name_ == "XC_HYB_GGA_XC_WB97") {
@@ -234,6 +290,9 @@ void LibXCFunctional::set_omega(double omega) {
         outfile->Printf("LibXCfunctional: set_omega is not defined for functional %s\n.", xc_func_name_.c_str());
         throw PSIEXCEPTION("LibXCfunctional: set_omega not defined for input functional");
     }
+#else
+    xc_func_set_ext_params_name(xc_functional_.get(), "_omega", omega);
+#endif
 }
 std::map<std::string, double> LibXCFunctional::query_libxc(const std::string& functional) {
     std::map<std::string, double> params;
@@ -265,100 +324,45 @@ std::map<std::string, double> LibXCFunctional::query_libxc(const std::string& fu
 void LibXCFunctional::set_tweak(std::vector<double> values) {
     bool failed = true;
     size_t vsize = values.size();
-    if (xc_func_name_ == "XC_GGA_X_B86") {
+    int npars = xc_func_info_get_n_ext_params(xc_functional_.get()->info);
+    if (npars == 0) {
+        throw PSIEXCEPTION(
+            "LibXCfunctional: set_tweak: There are no known tweaks for this functional, please double check "
+            "the functional form and add them if required.");
+    } else if (npars != vsize) {
+        std::ostringstream oss;
+        oss << "got " << vsize << ", expected " << npars;
+        throw PSIEXCEPTION(
+            "LibXCfunctional: set_tweak: Mismatch in size of tweaker vector and expected number of "
+            "input parameters:" +
+            oss.str() + "\n");
+    }
+
+    if (xc_func_name_ == "XC_GGA_C_PBE") {
         if (vsize == 3) {
-            // (XC(func_type) *p, FLOAT beta, FLOAT gamma, FLOAT omega);
-            xc_gga_x_b86_set_params(xc_functional_.get(), values[0], values[1], values[2]);
-            failed = false;
-        }
-    } else if (xc_func_name_ == "XC_GGA_X_B88") {
-        if (vsize == 2) {
-            // (XC(func_type) *p, FLOAT beta, FLOAT gamma);
-            xc_gga_x_b88_set_params(xc_functional_.get(), values[0], values[1]);
-            failed = false;
-        }
-    } else if (xc_func_name_ == "XC_GGA_X_PBE") {
-        if (vsize == 2) {
-            //  (XC(func_type) *p, FLOAT kappa, FLOAT mu);
-            xc_gga_x_pbe_set_params(xc_functional_.get(), values[0], values[1]);
-            failed = false;
-        }
-    } else if (xc_func_name_ == "XC_GGA_C_PBE") {
-        if (vsize == 1) {
-            // (XC(func_type) *p, FLOAT beta);
-            xc_gga_c_pbe_set_params(xc_functional_.get(), values[0]);
-            failed = false;
-        }
-    } else if (xc_func_name_ == "XC_GGA_X_PW91") {
-        if (vsize == 7) {
-            // (XC(func_type) *p, FLOAT a, FLOAT b, FLOAT c, FLOAT d, FLOAT f, FLOAT alpha, FLOAT expo);
-            xc_gga_x_pw91_set_params(xc_functional_.get(), values[0], values[1], values[2], values[3], values[4],
-                                     values[5], values[6]);
-            failed = false;
-        }
-    } else if (xc_func_name_ == "XC_GGA_X_RPBE") {
-        if (vsize == 2) {
-            // (XC(func_type) *p, FLOAT kappa, FLOAT mu);
-            xc_gga_x_rpbe_set_params(xc_functional_.get(), values[0], values[1]);
-            failed = false;
-        }
-    } else if (xc_func_name_ == "XC_GGA_X_OPTX") {
-        if (vsize == 3) {
-            // (XC(func_type) *p, FLOAT a, FLOAT b, FLOAT gamma);
-            xc_gga_x_optx_set_params(xc_functional_.get(), values[0], values[1], values[2]);
-            failed = false;
-        }
-    } else if (xc_func_name_ == "XC_GGA_C_LYP") {
-        if (vsize == 4) {
-            // (XC(func_type) *p, FLOAT A, FLOAT B, FLOAT c, FLOAT d);
-            xc_gga_c_lyp_set_params(xc_functional_.get(), values[0], values[1], values[2], values[3]);
-            failed = false;
-        }
-    } else if ((xc_func_name_ == "XC_HYB_GGA_XC_HSE03") || (xc_func_name_ == "XC_HYB_GGA_XC_HSE06")) {
-        if (vsize == 3) {
-            // "Mixing parameter beta", "Screening parameter omega_HF", "Screening parameter omega_PBE"
+            // (XC(func_type) *p, FLOAT beta); FLOAT gamma, FLOAT BB
+            // xc_gga_c_pbe_set_params(xc_functional_.get(), values[0]);
+            values[1] =
+                xc_func_info_get_ext_params_default_value(const_cast<xc_func_info_type*>(xc_functional_->info), 1);
+            values[2] =
+                xc_func_info_get_ext_params_default_value(const_cast<xc_func_info_type*>(xc_functional_->info), 2);
             xc_func_set_ext_params(xc_functional_.get(), values.data());
             failed = false;
         }
     } else if (xc_func_name_ == "XC_MGGA_X_TPSS") {
-        if (vsize == 5) {
+        if (vsize == 7) {
             // (xc_func_type *p, double b, double c, double e, double kappa, double mu, double BLOC_a, double BLOC_bu);
-            xc_mgga_x_tpss_set_params(xc_functional_.get(), values[0], values[1], values[2], values[3], values[4], 2.0,
-                                      0.0);
+            // xc_mgga_x_tpss_set_params(xc_functional_.get(), values[0], values[1], values[2], values[3],
+            // values[4], 2.0,
+            //                           0.0);
+            values[5] = 2.0;
+            values[6] = 0.0;
+            xc_func_set_ext_params(xc_functional_.get(), values.data());
             failed = false;
         }
-    } else if (xc_func_name_ == "XC_MGGA_C_TPSS") {
-        if (vsize == 6) {
-            // (xc_func_type *p, double beta, double d, double C0_0, double C0_1, double C0_2, double C0_3);
-            xc_mgga_c_tpss_set_params(xc_functional_.get(), values[0], values[1], values[2], values[3], values[4],
-                                      values[5]);
-            failed = false;
-        }
-    } else if (xc_func_name_ == "XC_MGGA_C_BC95") {
-        if (vsize == 2) {
-            // (XC(func_type) *p, FLOAT css, FLOAT copp);
-            xc_mgga_c_bc95_set_params(xc_functional_.get(), values[0], values[1]);
-            failed = false;
-        }
-        // } else if (xc_func_name_ == "XC_MGGA_C_PKZB") {
-        //     if (vsize == 6) {
-        //         // ((XC(func_type) *p, FLOAT beta, FLOAT d, FLOAT C0_0, FLOAT C0_1, FLOAT C0_2, FLOAT
-        //         // C0_3);
-        //         xc_mgga_c_pkzb_set_params(xc_functional_.get(), values[0], values[1], values[2], values[3],
-        //                                   values[4], values[5]);
-        //         failed = false;
-        //     }
     } else {
-        throw PSIEXCEPTION(
-            "LibXCfunctional: set_tweak: There are no known tweaks for this functional, please double check "
-            "the functional form and add them if required.");
-    }
-
-    // Did we match fully?
-    if (failed) {
-        throw PSIEXCEPTION(
-            "LibXCfunctional: set_tweak: Mismatch in size of tweaker vector and expected number of "
-            "input parameters.");
+        xc_func_set_ext_params(xc_functional_.get(), values.data());
+        failed = false;
     }
 
     user_tweakers_ = values;
@@ -782,10 +786,10 @@ void LibXCFunctional::compute_functional(const std::map<std::string, SharedVecto
                 }
             }
         }
-        if (deriv > 2) { // lgtm[cpp/constant-comparison]
+        if (deriv > 2) {  // lgtm[cpp/constant-comparison]
             throw PSIEXCEPTION("TRYING TO COMPUTE DERIV > 3 ");
         }
     }  // End polarized
 }
 
-}  // End namespace
+}  // namespace psi
