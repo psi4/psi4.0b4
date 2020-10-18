@@ -378,7 +378,7 @@ def _quiet_remove(filename):
         pass
 
 
-def run_qcschema(input_data, clean=True):
+def run_qcschema(input_data, clean=True, postclean=True):
 
     outfile = os.path.join(core.IOManager.shared_object().get_default_path(), str(uuid.uuid4()) + ".qcschema_tmpout")
     core.set_output_file(outfile, False)
@@ -402,7 +402,8 @@ def run_qcschema(input_data, clean=True):
         ret_data["provenance"] = {
             "creator": "Psi4",
             "version": __version__,
-            "routine": "psi4.schema_runner.run_qcschema"
+            "routine": "psi4.schema_runner.run_qcschema",
+            "module": ret_data.pop("module"),
         }
 
         exit_printing(start_time=start_time, success=True)
@@ -420,10 +421,13 @@ def run_qcschema(input_data, clean=True):
                                           success=False,
                                           error={
                                               'error_type': type(exc).__name__,
-                                              'error_message': ''.join(traceback.format_exception(*sys.exc_info())),
+                                              'error_message': input_data["stdout"] + ''.join(traceback.format_exception(*sys.exc_info())),
                                           })
 
-    atexit.register(_quiet_remove, outfile)
+    if postclean:  # subprocess
+        atexit.register(_quiet_remove, outfile)
+    else:  # psiapi
+        core.close_outfile()
 
     return ret
 
@@ -431,7 +435,7 @@ def run_qcschema(input_data, clean=True):
 def run_json(json_data, clean=True):
 
     warnings.warn(
-        "Using `psi4.schema_wrapper.run_schema` instead of `psi4.json_wrapper.run_qcschema` is deprecated, and in 1.5 it will stop working\n",
+        "Using `psi4.schema_wrapper.run_json` instead of `psi4.schema_wrapper.run_qcschema` is deprecated, and in 1.5 it will stop working\n",
         category=FutureWarning)
 
     # Set scratch
@@ -470,6 +474,8 @@ def run_json(json_data, clean=True):
         json_data["success"] = False
 
         json_data["raw_output"] = _read_output(outfile)
+
+    json_data.pop("module", None)
 
     if return_output:
         json_data["raw_output"] = _read_output(outfile)
@@ -519,7 +525,7 @@ def run_json_qcschema(json_data, clean, json_serialization, keep_wfn=False):
         molschemus = json_data["molecule"]  # dtype >=2
     else:
         molschemus = json_data  # dtype =1
-    mol = core.Molecule.from_schema(molschemus)
+    mol = core.Molecule.from_schema(molschemus, nonphysical=True)
 
     # Update molecule geometry as we orient and fix_com
     json_data["molecule"]["geometry"] = mol.geometry().np.ravel().tolist()
@@ -630,5 +636,6 @@ def run_json_qcschema(json_data, clean, json_serialization, keep_wfn=False):
     _clean_psi_environ(clean)
 
     json_data["schema_name"] = "qcschema_output"
+    json_data["module"] = wfn.module()
 
     return json_data
