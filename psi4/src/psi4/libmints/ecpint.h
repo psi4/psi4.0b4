@@ -45,12 +45,9 @@
 #include <vector>
 
 #include "psi4/pragma.h"
-#include "psi4/libmints/multiarr.h"
-#include "psi4/libmints/gaussquad.h"
 #include "psi4/libmints/typedefs.h"
 #include "psi4/libmints/onebody.h"
 #include "psi4/libmints/sointegral_onebody.h"
-#include "psi4/libmints/bessel.h"
 
 #include "libecpint/ecpint.hpp"
 
@@ -79,19 +76,15 @@ class ECPInt : public OneBodyAOInt {
     /// first() function, which provides the index of the first basis function the shell involves.
     std::map<int, int> libecp_shell_lookup_;
     std::vector<libecpint::GaussianShell> libecp_shells_;
-    std::vector<libecpint::ECP> libecp_ecps_;
+    std::vector<std::pair<int,libecpint::ECP>> centers_and_libecp_ecps_;
 
    public:
-    /**
-     * Sets the reference to the ECP basis and initialises the radial and angular integrals
-     * @param basis - reference to the ECP basis set
-     * @paramm maxLB - the maximum angular momentum in the orbital basis
-     */
     ECPInt(std::vector<SphericalTransform> &, std::shared_ptr<BasisSet>, std::shared_ptr<BasisSet>, int deriv = 0);
     ~ECPInt() override;
 
     /// Overridden shell-pair integral calculation over all ECP centers
-    void compute_pair(const GaussianShell &shellA, const GaussianShell &shellB) override;
+    void compute_pair(const GaussianShell &s1, const GaussianShell &s2) override;
+    void compute_pair_deriv1(const GaussianShell& s1, const GaussianShell& s2) override;
 };
 
 class ECPSOInt : public OneBodySOInt {
