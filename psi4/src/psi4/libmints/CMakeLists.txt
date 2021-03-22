@@ -63,8 +63,6 @@ list(APPEND sources
   cdsalclist.cc
   erd_eri.cc
   angularmomentum.cc
-  bessel.cc
-  gaussquad.cc
   ecpint.cc
   orthog.cc
   )
