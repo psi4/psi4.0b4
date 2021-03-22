@@ -2139,6 +2139,12 @@ SharedMatrix MintsHelper::effective_core_potential_grad(SharedMatrix D) {
         }
     }
 
+    // Make a list of all ECP centers
+    std::set<int> ecp_centers;
+    for (int ecp_shell = 0; ecp_shell < basisset_->n_ecp_shell(); ++ecp_shell){
+        const GaussianShell &ecp = basisset_->ecp_shell(ecp_shell);
+        ecp_centers.insert(ecp.ncenter());
+    }
 
     double **Dp = D->pointer();
 
@@ -2164,11 +2170,7 @@ SharedMatrix MintsHelper::effective_core_potential_grad(SharedMatrix D) {
         size_t aQ = basisset_->shell(Q).ncenter();
 
         // Make a list of all ECP centers and the current basis function pair
-        std::set<int> all_centers;
-        for (int ecp_shell = 0; ecp_shell < basisset_->n_ecp_shell(); ++ecp_shell){
-            const GaussianShell &ecp = basisset_->ecp_shell(ecp_shell);
-            all_centers.insert(ecp.ncenter());
-        }
+        std::set<int> all_centers(ecp_centers.begin(), ecp_centers.end());
         all_centers.insert(aP);
         all_centers.insert(aQ);
 
