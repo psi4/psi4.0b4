@@ -272,44 +272,52 @@ void DirectJK::compute_JK() {
 #endif
 
     auto factory = std::make_shared<IntegralFactory>(primary_, primary_, primary_, primary_);
+    
+    std::vector<SharedMatrix>& D_ref = (do_ifb_iter_ ? del_D_ao_ : D_ao_);
+    std::vector<SharedMatrix>& J_ref = (do_ifb_iter_ ? del_J_ao_ : J_ao_);
+    std::vector<SharedMatrix>& K_ref = (do_ifb_iter_ ? del_K_ao_ : K_ao_);
+    std::vector<SharedMatrix>& wK_ref = (do_ifb_iter_ ? del_wK_ao_ : wK_ao_);
 
     if (do_wK_) {
         std::vector<std::shared_ptr<TwoBodyAOInt>> ints;
         for (int thread = 0; thread < df_ints_num_threads_; thread++) {
             ints.push_back(std::shared_ptr<TwoBodyAOInt>(factory->erf_eri(omega_)));
+            if (density_screening_) ints[thread]->update_density(D_ref);
         }
         // TODO: Fast K algorithm
         if (do_J_) {
-            build_JK(ints, D_ao_, J_ao_, wK_ao_);
+            build_JK(ints, D_ref, J_ref, wK_ref);
         } else {
             std::vector<std::shared_ptr<Matrix>> temp;
             for (size_t i = 0; i < D_ao_.size(); i++) {
                 temp.push_back(std::make_shared<Matrix>("temp", primary_->nbf(), primary_->nbf()));
             }
-            build_JK(ints, D_ao_, temp, wK_ao_);
+            build_JK(ints, D_ref, temp, wK_ref);
         }
     }
 
     if (do_J_ || do_K_) {
         std::vector<std::shared_ptr<TwoBodyAOInt>> ints;
         ints.push_back(std::shared_ptr<TwoBodyAOInt>(factory->eri()));
+        if (density_screening_) ints[0]->update_density(D_ref);
         for (int thread = 1; thread < df_ints_num_threads_; thread++) {
             ints.push_back(std::shared_ptr<TwoBodyAOInt>(ints[0]->clone()));
+            if (density_screening_) ints[thread]->update_density(D_ref);
         }
         if (do_J_ && do_K_) {
-            build_JK(ints, D_ao_, J_ao_, K_ao_);
+            build_JK(ints, D_ref, J_ref, K_ref);
         } else if (do_J_) {
             std::vector<std::shared_ptr<Matrix>> temp;
             for (size_t i = 0; i < D_ao_.size(); i++) {
                 temp.push_back(std::make_shared<Matrix>("temp", primary_->nbf(), primary_->nbf()));
             }
-            build_JK(ints, D_ao_, J_ao_, temp);
+            build_JK(ints, D_ref, J_ref, temp);
         } else {
             std::vector<std::shared_ptr<Matrix>> temp;
             for (size_t i = 0; i < D_ao_.size(); i++) {
                 temp.push_back(std::make_shared<Matrix>("temp", primary_->nbf(), primary_->nbf()));
             }
-            build_JK(ints, D_ao_, temp, K_ao_);
+            build_JK(ints, D_ref, temp, K_ref);
         }
     }
 }
@@ -317,6 +325,9 @@ void DirectJK::postiterations() {}
 
 void DirectJK::build_JK(std::vector<std::shared_ptr<TwoBodyAOInt>>& ints, std::vector<std::shared_ptr<Matrix>>& D,
                         std::vector<std::shared_ptr<Matrix>>& J, std::vector<std::shared_ptr<Matrix>>& K) {
+    
+    timer_on("build_JK()");
+
     // => Zeroing <= //
     for (size_t ind = 0; ind < J.size(); ind++) {
         J[ind]->zero();
@@ -478,15 +489,18 @@ void DirectJK::build_JK(std::vector<std::shared_ptr<TwoBodyAOInt>>& ints, std::v
                         int S = task_shells[S2];
                         if (R2 * nshell + S2 > P2 * nshell + Q2) continue;
                         if (!ints[0]->shell_pair_significant(R, S)) continue;
-                        if (!ints[0]->shell_significant(P, Q, R, S)) continue;
+                        
+                        if (density_screening_ && !ints[0]->shell_significant_density(P, Q, R, S)) continue;
+                        else if (!ints[0]->shell_significant(P, Q, R, S)) continue;
 
                         // printf("Quartet: %2d %2d %2d %2d\n", P, Q, R, S);
-
+                        // timer_on("compute_shell(P, Q, R, S)");
                         // if (thread == 0) timer_on("JK: Ints");
                         if (ints[thread]->compute_shell(P, Q, R, S) == 0)
                             continue;  // No integrals in this shell quartet
                         computed_shells++;
                         // if (thread == 0) timer_off("JK: Ints");
+                        // timer_off("compute_shell(P, Q, R, S)");
 
                         const double* buffer = ints[thread]->buffer();
 
@@ -780,6 +794,7 @@ void DirectJK::build_JK(std::vector<std::shared_ptr<TwoBodyAOInt>>& ints, std::v
         printer->Printf("Computed %20zu Shell Quartets out of %20zu, (%11.3E ratio)\n", computed_shells,
                         possible_shells, computed_shells / (double)possible_shells);
     }
+    timer_off("build_JK()");
 }
 
 }  // namespace psi

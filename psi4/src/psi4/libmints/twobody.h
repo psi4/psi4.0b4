@@ -43,6 +43,7 @@
 #undef _XOPEN_SOURCE
 #endif
 #include "psi4/libpsi4util/exception.h"
+#include "psi4/libmints/matrix.h"
 
 namespace psi {
 
@@ -144,6 +145,12 @@ class PSI_API TwoBodyAOInt {
     /// Significant shell pairs, indexes by shell
     std::vector<std::vector<int>> function_to_function_;
     std::function<bool(int, int, int, int)> sieve_impl_;
+    /// Do Density Screening?
+    bool density_screening_;
+    /// Density Screening Tolerance
+    double density_screening_threshold_;
+    /// Max Density per Shell Pair
+    std::vector<std::vector<double>> max_dens_shell_pair_;
 
     void setup_sieve();
     void create_sieve_pair_info(const std::shared_ptr<BasisSet> bs, PairList &shell_pairs, bool is_bra);
@@ -198,6 +205,10 @@ class PSI_API TwoBodyAOInt {
     /*
      * Sieve information
      */
+    /// Update the Max Density Per Shell Pair given an updated Density Matrix (Haser 1989)
+    void update_density(const std::vector<SharedMatrix>& D);
+    /// Density Screening of a shell quartet (Haser 1989)
+    bool shell_significant_density(int M, int N, int R, int S) const;
     /// Ask the built in sieve whether this quartet contributes
     bool shell_significant(int M, int N, int R, int S) const { return sieve_impl_(M, N, R, S); };
     /// Are any of the quartets within a given shellpair list significant
