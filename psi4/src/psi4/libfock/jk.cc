@@ -211,6 +211,11 @@ void JK::common_init() {
         std::make_shared<IntegralFactory>(primary_, primary_, primary_, primary_);
     auto pet = std::make_shared<PetiteList>(primary_, integral);
     AO2USO_ = SharedMatrix(pet->aotoso());
+
+    Options& options = Process::environment.options;
+
+    density_screening_ = options.get_bool("SCF_DENSITY_SCREENING");
+    ifb_ = options.get_bool("IFB");
 }
 size_t JK::memory_overhead() const {
     size_t mem = 0L;

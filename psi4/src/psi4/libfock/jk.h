@@ -34,6 +34,7 @@
 PRAGMA_WARNING_PUSH
 PRAGMA_WARNING_IGNORE_DEPRECATED_DECLARATIONS
 #include <memory>
+#include <utility>
 PRAGMA_WARNING_POP
 #include "psi4/libmints/typedefs.h"
 #include "psi4/libmints/dimension.h"
@@ -253,6 +254,13 @@ class PSI_API JK {
     bool do_K_;
     /// Do wK matrices? Defaults to false
     bool do_wK_;
+    /// Perform an incremental fock build?
+    bool incr_fock_;
+
+    /// Perform Density Screening for ERIs?
+    bool density_screening_;
+    /// Perform Incremental Fock Build for J and K Matrices?
+    bool ifb_;
 
     /// Combine (pq|rs) and (pq|w|rs) integrals before contracting?
     bool wcombine_;
@@ -283,6 +291,8 @@ class PSI_API JK {
     std::vector<SharedMatrix> K_;
     /// wK matrices: \f$K_{mn}(\omega)=(ml|\omega|ns)C_{li}^{left}C_{si}^{right}\f$
     std::vector<SharedMatrix> wK_;
+    /// Previous D Matrix, used in Incremental Fock build
+    std::vector<SharedMatrix> D_prev_;
 
     // => Microarchitecture-Level State Variables (No Spatial Symmetry) <= //
 
@@ -302,6 +312,8 @@ class PSI_API JK {
     std::vector<SharedMatrix> K_ao_;
     /// wK matrices: wK_mn = (ml|w|ns) C_li^left C_si^right
     std::vector<SharedMatrix> wK_ao_;
+    /// Previous D Matrix (AO) used in Incremental Fock build
+    std::vector<SharedMatrix> D_ao_prev_;
 
     // => Per-Iteration Setup/Finalize Routines <= //
 
@@ -709,6 +721,23 @@ class PSI_API DirectJK : public JK {
     std::string name() override { return "DirectJK"; }
     size_t memory_estimate() override;
 
+    // => Required Algorithm-Specific Variables <= //
+
+    // Previous Iteration Matrices for Incremental Fock Build
+    std::vector<SharedMatrix> D_prev_;
+    std::vector<SharedMatrix> J_prev_;
+    std::vector<SharedMatrix> K_prev_;
+    std::vector<SharedMatrix> wK_prev_;
+
+    // Delta Matrices for Incremental Fock Build
+    std::vector<SharedMatrix> del_D_;
+    std::vector<SharedMatrix> del_J_;
+    std::vector<SharedMatrix> del_K_;
+    std::vector<SharedMatrix> del_wK_;
+
+    // Current Direct SCF Iteration
+    int iteration_ = 0;
+
     // => Required Algorithm-Specific Methods <= //
 
     /// Do we need to backtransform to C1 under the hood?
@@ -723,6 +752,14 @@ class PSI_API DirectJK : public JK {
     /// Build the J and K matrices for this integral class
     void build_JK(std::vector<std::shared_ptr<TwoBodyAOInt> >& ints, std::vector<std::shared_ptr<Matrix> >& D,
                   std::vector<std::shared_ptr<Matrix> >& J, std::vector<std::shared_ptr<Matrix> >& K);
+    
+    /// Build J and K matrices separately for linear scaling methods
+    
+    void build_J(std::vector<std::shared_ptr<TwoBodyAOInt> >& ints, std::vector<std::shared_ptr<Matrix> >& D,
+                  std::vector<std::shared_ptr<Matrix> >& J);
+    
+    void build_linK(std::vector<std::shared_ptr<TwoBodyAOInt> >& ints, std::vector<std::shared_ptr<Matrix> >& D,
+                  std::vector<std::shared_ptr<Matrix> >& K);
 
     /// Common initialization
     void common_init();

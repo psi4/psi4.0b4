@@ -69,6 +69,10 @@ TwoBodyAOInt::TwoBodyAOInt(const IntegralFactory *intsfactory, int deriv)
     ket_same_ = (original_bs3_ == original_bs4_);
     braket_same_ = (original_bs1_ == original_bs3_ && original_bs2_ == original_bs4_);
 
+    // Density Screening Options
+    density_screening_ = Process::environment.options.get_bool("SCF_DENSITY_SCREENING");
+    density_screening_threshold_ = Process::environment.options.get_double("DENSITY_SCREENING_TOLERANCE");
+
     // Setup sieve data
     screening_threshold_ = Process::environment.options.get_double("INTS_TOLERANCE");
     auto screentype = Process::environment.options.get_str("SCREENING");
@@ -80,6 +84,8 @@ TwoBodyAOInt::TwoBodyAOInt(const IntegralFactory *intsfactory, int deriv)
         throw PSIEXCEPTION("Unknown screening type " + screentype + " in TwoBodyAOInt()");
     
     if (screening_threshold_ == 0.0) screening_type_ = ScreeningType::None;
+
+    max_dens_shell_pair_.resize(bs1_->nshell(), std::vector<double>(bs1_->nshell(), 1.0));
 }
 
 TwoBodyAOInt::TwoBodyAOInt(const TwoBodyAOInt &rhs) : TwoBodyAOInt(rhs.integral_, rhs.deriv_) {
@@ -112,6 +118,136 @@ TwoBodyAOInt::TwoBodyAOInt(const TwoBodyAOInt &rhs) : TwoBodyAOInt(rhs.integral_
 
 TwoBodyAOInt::~TwoBodyAOInt() {}
 
+// Haser 1989, Equation 7 
+void TwoBodyAOInt::update_density(const std::vector<SharedMatrix>& D) {
+    
+    timer_on("Density Screen");
+#pragma omp parallel for
+    for (int M = 0; M < nshell_; M++) {
+        for (int N = 0; N < nshell_; N++) {
+            int m_start = bs1_->shell(M).function_index();
+            int num_m = bs1_->shell(M).nfunction();
+
+            int n_start = bs1_->shell(N).function_index();
+            int num_n = bs1_->shell(N).nfunction();
+            
+            double max_dens = 0.0;
+            for (int m = m_start; m < m_start + num_m; m++) {
+                for (int n = n_start; n < n_start + num_n; n++) {
+                    double val = 0.0;
+                    for (int i = 0; i < D.size(); i++) {
+                        val += std::abs(D[i]->get(m, n));
+                    }
+                    if (val > max_dens) max_dens = val;
+                }
+            }
+
+            max_dens_shell_pair_[M][N] = max_dens;
+        }
+    }
+    timer_off("Density Screen");
+
+}
+
+// Haser 1989 Equations 6 to 14
+bool TwoBodyAOInt::shell_significant_density(int M, int N, int R, int S) const {
+
+    // THR in Equation 9
+    double density_threshold = density_screening_threshold_;
+
+    // Equation 13
+    double Q_MN_sq = shell_pair_values_[N * nshell_ + M];
+    double Q_RS_sq = shell_pair_values_[S * nshell_ + R];
+
+    // Equation 6
+    double max_dens_factor = max_dens_shell_pair_[M][N];
+    max_dens_factor = std::max(max_dens_factor, max_dens_shell_pair_[R][S]);
+    max_dens_factor = std::max(max_dens_factor, 0.25 * max_dens_shell_pair_[M][R]);
+    max_dens_factor = std::max(max_dens_factor, 0.25 * max_dens_shell_pair_[M][S]);
+    max_dens_factor = std::max(max_dens_factor, 0.25 * max_dens_shell_pair_[N][R]);
+    max_dens_factor = std::max(max_dens_factor, 0.25 * max_dens_shell_pair_[N][S]);
+
+    // Squared to account for the fact that Q_MN is given as its square
+    max_dens_factor *= max_dens_factor;
+    density_threshold *= density_threshold;
+
+    // Equations 6, 9, and 14
+    if (Q_MN_sq * Q_RS_sq * max_dens_factor > density_threshold) return true;
+
+    return false;
+
+}
+
+// Density screening for J part of algorithm for separated J and K builds
+bool TwoBodyAOInt::shell_significant_density_J(int M, int N, int R, int S) {
+
+    // THR in Equation 9
+    double density_threshold = density_screening_threshold_;
+
+    // Equation 13
+    double Q_MN_sq = shell_pair_values_[N * nshell_ + M];
+    double Q_RS_sq = shell_pair_values_[S * nshell_ + R];
+
+    // Equation 6
+    double max_dens_factor = max_dens_shell_pair_[M][N];
+    max_dens_factor = std::max(max_dens_factor, max_dens_shell_pair_[R][S]);
+
+    // Squared to account for the fact that Q_MN is given as its square
+    max_dens_factor *= max_dens_factor;
+    density_threshold *= density_threshold;
+
+    // Equations 6, 9, and 14
+    if (Q_MN_sq * Q_RS_sq * max_dens_factor > density_threshold) return true;
+
+    return false;
+
+}
+
+// Density screening for K part of algorithm for separated J and K builds
+bool TwoBodyAOInt::shell_significant_density_K(int M, int N, int R, int S) {
+
+    // THR in Equation 9
+    double density_threshold = density_screening_threshold_;
+
+    // Equation 13
+    double Q_MN_sq = shell_pair_values_[N * nshell_ + M];
+    double Q_RS_sq = shell_pair_values_[S * nshell_ + R];
+
+    // Equation 6
+    double max_dens_factor = 0.25 * max_dens_shell_pair_[M][R];
+    max_dens_factor = std::max(max_dens_factor, 0.25 * max_dens_shell_pair_[M][S]);
+    max_dens_factor = std::max(max_dens_factor, 0.25 * max_dens_shell_pair_[N][R]);
+    max_dens_factor = std::max(max_dens_factor, 0.25 * max_dens_shell_pair_[N][S]);
+
+    // Squared to account for the fact that Q_MN is given as its square
+    
+    max_dens_factor *= max_dens_factor;
+    density_threshold *= density_threshold;
+
+    // Equations 6, 9, and 14
+    if (Q_MN_sq * Q_RS_sq * max_dens_factor > density_threshold) return true;
+
+    return false;
+
+}
+
+// Pair Screening used for bra function M and ket function N, Ochsenfeld 1998 Equation 3
+double TwoBodyAOInt::pair_screen_linK(int M, int N) {
+    // (m_max|m_man) and (n_max|n_max) in Equation 3
+    // Note that this is not square_rooted
+    return max_dens_shell_pair_[M][N] * std::sqrt(shell_single_values_[M] * shell_single_values_[N]);
+}
+
+// Quartet Screening Used in LinK procedure
+double TwoBodyAOInt::quart_screen_linK(int M, int N, int R, int S) {
+    return max_dens_shell_pair_[M][R] * std::sqrt(shell_pair_values_[M * nshell_ + N] * shell_pair_values_[R * nshell_ + S]);
+}
+
+// Value of (MN|MN)^1/2 * (RS|RS)^1/2 over all R and S
+double TwoBodyAOInt::shell_pair_max_value(int M, int N) {
+    return std::sqrt(shell_pair_values_[M * nshell_ + N] * max_integral_);
+}
+
 bool TwoBodyAOInt::shell_significant_csam(int M, int N, int R, int S) { 
     // Square of standard Cauchy-Schwarz Q_mu_nu terms (Eq. 1)
     double mn_mn = shell_pair_values_[N * nshell_ + M];
@@ -133,8 +269,10 @@ bool TwoBodyAOInt::shell_significant_csam(int M, int N, int R, int S) {
 }
 
 bool TwoBodyAOInt::shell_significant_schwarz(int M, int N, int R, int S) {
+
     return shell_pair_values_[N * nshell_ + M] * shell_pair_values_[R * nshell_ + S] >= screening_threshold_squared_;
 }
+
 bool TwoBodyAOInt::shell_significant_none(int M, int N, int R, int S) { return true; }
 
 void TwoBodyAOInt::setup_sieve() {
@@ -199,6 +337,7 @@ void TwoBodyAOInt::create_sieve_pair_info(const std::shared_ptr<BasisSet> bs, Pa
 
     function_pair_values_.resize((size_t)nbf_ * nbf_, 0.0);
     shell_pair_values_.resize((size_t)nshell_ * nshell_, 0.0);
+    shell_single_values_.resize((size_t)nshell_, 0.0);
     max_integral_ = 0.0;
 
     bs1_ = bs;
@@ -220,6 +359,7 @@ void TwoBodyAOInt::create_sieve_pair_info(const std::shared_ptr<BasisSet> bs, Pa
                         std::max(shell_max_val, std::abs(buffer[p * (nQ * nP * nQ + nQ) + q * (nP * nQ + 1)]));
                 }
             }
+
             max_integral_ = std::max(max_integral_, shell_max_val);
             shell_pair_values_[P * nshell_ + Q] = shell_pair_values_[Q * nshell_ + P] = shell_max_val;
             for (int p = 0; p < nP; p++) {
@@ -229,6 +369,13 @@ void TwoBodyAOInt::create_sieve_pair_info(const std::shared_ptr<BasisSet> bs, Pa
             }
         }
     }
+
+    for (int P = 0; P < nshell_; P++) {
+        for (int Q = 0; Q < nshell_; Q++) {
+            shell_single_values_[P] = std::max(shell_single_values_[P], shell_pair_values_[P * nshell_ + Q]);
+        }
+    }
+
     bs1_ = original_bs1_;
     bs2_ = original_bs2_;
     bs3_ = original_bs3_;
