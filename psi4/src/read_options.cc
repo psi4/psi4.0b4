@@ -1856,17 +1856,27 @@ int read_options(const std::string &name, Options &options, bool suppress_printi
         options.add_str("JOBTYPE", "");
         /*- Do simulate the effects of local correlation techniques? -*/
         options.add_bool("LOCAL", false);
-        /*- Desired treatment of "weak pairs" in the local-CCSD method. The value of ``NONE`` (unique available option)
-        treats weak pairs in the same manner as strong pairs. -*/
-        options.add_str("LOCAL_WEAKP", "NONE");
-        /*- Value (always between one and zero) for the Broughton-Pulay completeness
-        check used to contruct orbital domains for local-CC calculations. See
-        J. Broughton and P. Pulay, J. Comp. Chem. 14, 736-740 (1993) and C. Hampel
-        and H.-J. Werner, J. Chem. Phys. 104, 6286-6297 (1996). -*/
+        /*- Desired treatment of "weak pairs" in the local-CCSD method. The value of ``NONE``
+        treats weak pairs in the same manner as strong pairs. ``NEGLECT`` neglects the
+        contribution of weak pairs while ``MP2`` adds the MP2-level correction to the energy -*/
+        options.add_str("LOCAL_WEAKP", "NONE", "NONE NEGLECT RESPONSE MP2");
+        /*- Value (always between one and zero) of the weak pair
+          threshold for the PNO and PNO++ methods. -*/
+        options.add_double("WEAKP_CUTOFF", 0.02);
+        /*- Value (always between one and zero) of the PNO occupation number
+          threshold for the PNO and PNO++ methods. -*/
         options.add_double("LOCAL_CUTOFF", 0.02);
-        /*- Type of local-CCSD scheme to be simulated. ``WERNER`` (unique available option) selects the method
-        developed by H.-J. Werner and co-workers. -*/
-        options.add_str("LOCAL_METHOD", "WERNER");
+        /*- Type of local-CCSD scheme to be simulated. 
+        ``PNO`` selects the Pair Natural Orbital method
+        developed by Meyer, Ahlrichs, and most recently by Neese and co-workers.
+        ``PNO++`` and ``cPNO++`` selects the Perturbed Pair Natural Orbital methods
+        developed by Crawford and co-workers. -*/
+        options.add_str("LOCAL_METHOD", "PNO", "PNO PNO++ CPNO++");
+        /*- Type of perturbation to use for PNO++ method. -*/
+        options.add_str("LOCAL_PERT", "DIPOLE", "DIPOLE NABLA");
+        /*- Value (always between one and zero) of the PNO occupation number
+          threshold for the cPNO++ method. -*/
+        options.add_double("UNPERT_CUTOFF", 1e-6);
         /*- Do apply local filtering to single de-excitation ($\lambda 1$ amplitudes? -*/
         options.add_bool("LOCAL_FILTER_SINGLES", true);
         /*- Cutoff value for local-coupled-perturbed-Hartree-Fock -*/
@@ -2116,17 +2126,26 @@ int read_options(const std::string &name, Options &options, bool suppress_printi
         options.add_bool("RESTART", 1);
         /*- Do simulate local correlation? -*/
         options.add_bool("LOCAL", 0);
-        /*- Value (always between one and zero) for the Broughton-Pulay completeness
-        check used to contruct orbital domains for local-CC calculations. See
-        J. Broughton and P. Pulay, J. Comp. Chem. 14, 736-740 (1993) and C. Hampel
-        and H.-J. Werner, J. Chem. Phys. 104, 6286-6297 (1996). -*/
-        options.add_double("LOCAL_CUTOFF", 0.01);
-        /*- Type of local-CCSD scheme to be simulated. ``WERNER`` (unique available option) selects the method
-        developed by H.-J. Werner and co-workers. -*/
-        options.add_str("LOCAL_METHOD", "WERNER");
+        /*- Value (always between one and zero) of the PNO occupation number
+          threshold for the PNO and PNO++ methods. -*/
+        options.add_double("LOCAL_CUTOFF", 0.02);
+        /*- Type of local-CCSD scheme to be simulated. 
+        ``PNO`` selects the Pair Natural Orbital method
+        developed by Meyer, Ahlrichs, and most recently by Neese and co-workers.
+        ``PNO++`` and ``cPNO++`` selects the Perturbed Pair Natural Orbital methods
+        developed by Crawford and co-workers. -*/
+        options.add_str("LOCAL_METHOD", "PNO PNO++ CPNO++");
+        /*- Type of perturbation to use for PNO++ method. -*/
+        options.add_str("LOCAL_PERT", "NONE", "DIPOLE NABLA");
         /*- Desired treatment of "weak pairs" in the local-CCSD method. The value of ``NONE`` (unique available option)
         treats weak pairs in the same manner as strong pairs. -*/
-        options.add_str("LOCAL_WEAKP", "NONE");
+        options.add_str("LOCAL_WEAKP", "NONE", "NONE NEGLECT MP2");
+        /*- Value (always between one and zero) of the weak pair
+          threshold for the PNO and PNO++ methods. -*/
+        options.add_double("WEAKP_CUTOFF", 1e-4);
+        /*- Value (always between one and zero) of the PNO occupation number
+          threshold for the cPNO++ method. -*/
+        options.add_double("UNPERT_CUTOFF", 1e-6);
         /*- Do apply local filtering to single excitation amplitudes? -*/
         options.add_bool("LOCAL_FILTER_SINGLES", false);
         /*- Cutoff value for local-coupled-perturbed-Hartree-Fock -*/
@@ -2296,25 +2315,34 @@ int read_options(const std::string &name, Options &options, bool suppress_printi
         options.add_str("ABCD", "NEW", "NEW OLD");
         /*- Do simulate the effects of local correlation techniques? -*/
         options.add_bool("LOCAL", 0);
-        /*- Value (always between one and zero) for the Broughton-Pulay completeness
-        check used to contruct orbital domains for local-CC calculations. See
-        J. Broughton and P. Pulay, J. Comp. Chem. 14, 736-740 (1993) and C. Hampel
-        and H.-J. Werner, J. Chem. Phys. 104, 6286-6297 (1996). -*/
+        /*- Value (always between one and zero) of the PNO occupation number
+          threshold for the PNO and PNO++ methods. -*/
         options.add_double("LOCAL_CUTOFF", 0.02);
-        /*- Type of local-CCSD scheme to be simulated. ``WERNER`` selects the method
-        developed by H.-J. Werner and co-workers, and ``AOBASIS`` selects the method
-        developed by G.E. Scuseria and co-workers (currently inoperative). -*/
-        options.add_str("LOCAL_METHOD", "WERNER", "WERNER AOBASIS");
+        /*- Type of local-CCSD scheme to be simulated. /
+        ``PNO`` selects the Pair Natural Orbital method
+        developed by Meyer, Ahlrichs, and most recently by Neese and co-workers.
+        ``PNO++`` and ``cPNO++`` selects the Perturbed Pair Natural Orbital methods
+        developed by Crawford and co-workers. -*/
+        options.add_str("LOCAL_METHOD", "PNO", "PNO PNO++ CPNO++");
         /*- Desired treatment of "weak pairs" in the local-CCSD method. A value of
         ``NEGLECT`` ignores weak pairs entirely. A value of ``NONE`` treats weak pairs in
         the same manner as strong pairs. A value of MP2 uses second-order perturbation
         theory to correct the local-CCSD energy computed with weak pairs ignored. -*/
         options.add_str("LOCAL_WEAKP", "NONE", "NONE NEGLECT MP2");
+        /*- Value (always between one and zero) of the weak pair
+          threshold for the PNO and PNO++ methods. -*/
+        options.add_double("WEAKP_CUTOFF", 1e-4);
         // options.add_int("LOCAL_FILTER_SINGLES", 1);
         /*- Cutoff value for local-coupled-perturbed-Hartree-Fock -*/
         options.add_double("LOCAL_CPHF_CUTOFF", 0.10);
         /*- Definition of local pair domains, default is BP, Boughton-Pulay. -*/
         options.add_str("LOCAL_PAIRDEF", "BP", "BP RESPONSE");
+        /*- Array that specifies the desired frequencies of the incident
+        radiation field in CCLR calculations.  If only one element is
+        given, the units will be assumed to be atomic units.  If more
+        than one element is given, then the units must be specified as the final
+        element of the array.  Acceptable units are ``HZ``, ``NM``, ``EV``, and ``AU``. -*/
+        options.add("OMEGA", new ArrayType());
         /*- Number of important $t@@1$ and $t@@2$ amplitudes to print -*/
         options.add_int("NUM_AMPS_PRINT", 10);
         /*- Convergence criterion for Brueckner orbitals. The convergence is
