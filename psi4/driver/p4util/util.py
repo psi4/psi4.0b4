@@ -34,9 +34,11 @@ import warnings
 from typing import Union
 
 from psi4 import core
-from psi4.driver.procrouting import *
+
 from .exceptions import ValidationError
-from .prop_util import *
+
+__all__ = ["cubeprop", "get_memory", "oeprop", "set_memory"]
+
 
 def oeprop(wfn: core.Wavefunction, *args, **kwargs):
     """Evaluate one-electron properties.
@@ -57,19 +59,21 @@ def oeprop(wfn: core.Wavefunction, *args, **kwargs):
     >>> oeprop(wfn, 'DIPOLE', 'QUADRUPOLE', title='H3O+ SCF')
 
     """
+    from ..prop_util import free_atom_volumes
+
     oe = core.OEProp(wfn)
     if 'title' in kwargs:
         oe.set_title(kwargs['title'])
     for prop in args:
         oe.add(prop)
-            
+
         # If we're doing MBIS, we want the free-atom volumes
         # in order to compute volume ratios,
         # but only if we're calling oeprop as the whole molecule
         free_atom = kwargs.get('free_atom',False)
         if "MBIS" in prop.upper() and not free_atom:
             core.print_out("  Computing free-atom volumes\n")
-            free_atom_volumes(wfn)    
+            free_atom_volumes(wfn)
 
     oe.compute()
 
