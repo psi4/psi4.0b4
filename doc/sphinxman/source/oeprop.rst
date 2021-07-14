@@ -79,6 +79,7 @@ summarized in the table below.
    | Natural orbital occupations        | NO_OCCUPATIONS        |                                                                                   |
    +------------------------------------+-----------------------+-----------------------------------------------------------------------------------+
    | Stockholder Atomic Multipoles      | MBIS_CHARGES          | Generates atomic charges, dipoles, etc. See :ref:`sec:oeprop_mbis`                |
+   | Stockholder Atomic Multipoles      | MBIS                  | Generates atomic charges, dipoles, etc. See :ref:`sec:oeprop_mbis`                |
    +------------------------------------+-----------------------+-----------------------------------------------------------------------------------+
 
 There are two ways the computation of one-electron properties can be requested. 
